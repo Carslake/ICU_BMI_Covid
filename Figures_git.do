@@ -4,7 +4,7 @@
 * Requires (in work_dir): Deleteme_Prepared_data.dta
 * Creates  (in work_dir): Figures.log, F1.pdf, FS1.pdf-FS13.pdf, F3.pdf, FS14.pdf-FS15.pdf
 * Takes about 11 mins to run
-* David Carslake, April 2024
+* David Carslake, July 2024
 ************************************************************************************************************************
 * Working directory must be specified
 
@@ -39,13 +39,13 @@ display c(current_date)+", "+c(current_time)
 set graphics off
 local general_options_month = `"frequency width(1) scheme(s2mono) graphregion(color(white)) lwidth(0) ylabel(0 2000 4000 6000 8000) xsize(3.2) ysize(2.5) ytitle("Frequency", size(medlarge))"'
 local p1_options = `"start(23.999999) xscale(range(23.5, 44.5)) xtitle("Date admitted to ICU with COVID-19", size(medlarge)) title("COVID-19 patients", size(medlarge) position(11))"'
-local p1_xlabels = `" xlabel(24 "1 Jan 2020" 30 "1 Jul 2020" 36 "1 Jan 2021" 42 "1 Jul 2020") xmticks(24(1)44, tlength(*0.5))"'
+local p1_xlabels = `" xlabel(24 "1 Jan 2020" 30 "1 Jul 2020" 36 "1 Jan 2021" 42 "1 Jul 2021") xmticks(24(1)44, tlength(*0.5))"'
 histogram Month if Useme1==1 & Condition=="cov", `general_options_month' `p1_options' `p1_xlabels' name(p1, replace) 
 local p2_options = `"start(0.999999) xscale(range(-0.5, 20.5)) xtitle("Date admitted to ICU with non-COVID-19", size(medlarge)) title("Non-COVID-19 patients, before pandemic", size(medlarge) position(11))"'
-local p2_xlabels = `"xlabel(0 "1 Jan 2020" 6 "1 Jul 2020" 12 "1 Jan 2021" 18 "1 Jul 2020") xmticks(0(1)20, tlength(*0.5))"'
+local p2_xlabels = `"xlabel(0 "1 Jan 2018" 6 "1 Jul 2018" 12 "1 Jan 2019" 18 "1 Jul 2019") xmticks(0(1)20, tlength(*0.5))"'
 histogram Month if Useme1==1 & Condition=="flu", `general_options_month' `p2_options' `p2_xlabels' name(p2, replace) 
 local p3_options = `"start(23.999999) xscale(range(23.5, 44.5)) xtitle("Date admitted to ICU with non-COVID-19", size(medlarge)) title("Non-COVID-19 patients, during pandemic", size(medlarge) position(11))"'
-local p3_xlabels = `" xlabel(24 "1 Jan 2020" 30 "1 Jul 2020" 36 "1 Jan 2021" 42 "1 Jul 2020") xmticks(24(1)44, tlength(*0.5))"'
+local p3_xlabels = `" xlabel(24 "1 Jan 2020" 30 "1 Jul 2020" 36 "1 Jan 2021" 42 "1 Jul 2021") xmticks(24(1)44, tlength(*0.5))"'
 histogram Month if Useme2==1 & Condition=="flu", `general_options_month' `p3_options' `p3_xlabels' name(p3, replace) 
 local general_options_region6 = `"frequency discrete scheme(s2mono) graphregion(color(white)) lwidth(0) ylabel(0 2000 4000 6000 8000 10000 "10000") barwidth(0.5) xlabel(0 "London" 1 "E/M England" 2 "N England" 3 "S England" 4 "Wales" 5 "N Ireland", labsize(small))  xsize(3.2) ysize(2.5) ytitle("Frequency", size(medlarge))"'
 histogram Region6 if Useme1==1 & Condition=="cov", `general_options_region6' name(p4, replace) xtitle("Region admitted to ICU with COVID-19", size(medlarge)) title("COVID-19 patients", size(medlarge) position(11))
@@ -335,15 +335,22 @@ graph drop p_*
 * Figure 3, Figures S14-S15 (Mortality~BMI_cspl):
 *------------------------------------------------
 * [Note: Consistent with the use of condition-specific zBMI, I've plotted cov and flu on separate X axes; HR in each are relative to mean BMI for that condition]
-* SETTINGS: Define the plotted ranges of zBMI and HR:
-summarize zBMI if Useme1==1
-local Xmin_z = -3
-local Xmax_z = 10
-local Ymin = 0.5
-local Ymax = 5
-local x1labels = "10(10)100"
-local x2labels = "10(10)100"
-local ylabels = "0.5 0.7 1 1.4 2 3.2 5"
+* Define the plotted ranges of BMI and HR:
+* I'm going to truncate each plot at the overall 1st and 99th percentiles of (condition-specific) zBMI (or the observed range of BMI for the stratum and condition if that's narrower):
+summarize zBMI if Useme1==1, detail
+local plotXmin_z = r(p1)
+local plotXmax_z = r(p99)
+* The X-axis range will be the same, but converted back to BMI for each condition:
+foreach condition in "cov" "flu"{
+	local Xmin_`condition' = `plotXmin_z'*`SD_BMI_`condition''+`Mean_BMI_`condition''
+	local Xmax_`condition' = `plotXmax_z'*`SD_BMI_`condition''+`Mean_BMI_`condition''
+}	
+local x1labels = "20(10)50"
+local x2labels = "20(10)50"
+* The Y range is just defined manually:
+local Ymin = 0.4
+local Ymax = 3.5
+local ylabels = "0.5 0.7 1 1.4 2 3.2"
 local plotpoints = 400
 * Make splines of zBMI, storing the knots:
 mkspline "zBMI_cspl" = zBMI if Useme1==1, cubic nknots(5) displayknots
@@ -353,11 +360,6 @@ local knots  "`=K[1,1]'  `=K[1,2]' `=K[1,3]'  `=K[1,4]'  `=K[1,5]'"
 stset FUT, failure(Outcome) id(recordid)
 * Define the adjustment set (except for period & region):
 local full_adjustment = "c.Male c.Age_cspl1 c.Age_cspl2 c.Age_cspl3 c.Age_cspl4 i.Ethnicity i.Deprivation i.Period i.Region6"
-* Convert the X range from zBMI to condition-specific kg per m^2:
-foreach condition in "cov" "flu"{
-	local Xmin_`condition' = `Xmin_z'*`SD_BMI_`condition''+`Mean_BMI_`condition''
-	local Xmax_`condition' = `Xmax_z'*`SD_BMI_`condition''+`Mean_BMI_`condition''
-}
 * Loop through the different stratification options:
 local strata = "None Period==1 Period==2 Period==3 Period==4 Period==5 Period==6 Region6==0 Region6==1 Region6==2 Region6==3 Region6==4 Region6==5"
 local Nplots = wordcount("`strata'")
@@ -395,7 +397,7 @@ forvalues plotno = 1/`Nplots'{
 	foreach condition in "cov" "flu"{
 		generate In_plot_range = 1
 		* Note which zBMI are within the plotting range:
-		replace In_plot_range = 0 if zBMI<`Xmin_z' |zBMI>`Xmax_z'
+		replace In_plot_range = 0 if zBMI<`plotXmin_z' | zBMI>`plotXmax_z'
 		* Make new rows containing fitted data to plot:
 		local row_start = _N+1
 		local row_finish = `row_start'+(`plotpoints'-1)
@@ -429,7 +431,7 @@ forvalues plotno = 1/`Nplots'{
 		drop XR	
 		* Convert plotted zBMI back to kg per m^2:
 		replace plotX`condition' = plotX`condition'*`SD_BMI_`condition''+`Mean_BMI_`condition''
-		* Calculate outer percentiles in kg per m^2:
+		* Calculate outer percentiles in kg per m^2 (used only if plotting outer percentiles as vertical lines):
 		summarize zBMI if Useme1==1 & Condition=="`condition'" `stratification', detail
 		local X_LC_`condition' = r(p1)*`SD_BMI_`condition''+`Mean_BMI_`condition''
 		local X_UC_`condition' = r(p99)*`SD_BMI_`condition''+`Mean_BMI_`condition''
@@ -437,17 +439,18 @@ forvalues plotno = 1/`Nplots'{
 		drop Plotme
 		* Make an indicator variable to plot the extreme of X within the range, if more extreme values have been omitted from the plot:
 		generate plotXT`condition' = .
-		count if Useme1==1 & Condition=="`condition'" & zBMI<`Xmin_z' `stratification' 
+		count if Useme1==1 & Condition=="`condition'" & zBMI<`plotXmin_z' `stratification' 
 		if r(N)>0{
 			summarize plotX`condition' if !missing(plotX`condition')
 			replace plotXT`condition' = 1 if plotX`condition'==r(min)
 		}
-		count if Useme1==1 & Condition=="`condition'" & zBMI>`Xmax_z' `stratification' 
+		count if Useme1==1 & Condition=="`condition'" & zBMI>`plotXmax_z' `stratification' 
 		if r(N)>0{
 			summarize plotX`condition' if !missing(plotX`condition')
 			replace plotXT`condition' = 1 if plotX`condition'==r(max)
 		}
 		* Make an indicator variable to plot the extreme of Y within the range, if more extreme values have been omitted from the plot:
+		* (If some fitted values are omitted due to extreme X _and_ extreme Y, code would need adapting. In this case, no fitted values get omitted due to extreme Y)
 		generate plotYT`condition' = .
 		count if !missing(plotY`condition') & plotY`condition'<`Ymin' 
 		if r(N)>0{
@@ -489,7 +492,7 @@ forvalues plotno = 1/`Nplots'{
 		local X1_opts = `"xtitle("BMI (kg/m{sup:2}) in COVID-19 patients", color(`cov_colour')) xscale(range(`Xmin_cov' `Xmax_cov')) xlabel(`x1labels', labgap(*0.4) tlength(*0.5) tlcolor(black) labcolor(`cov_colour'))"'
 		local X2_opts = `"xtitle("BMI (kg/m{sup:2}) in non-COVID-19 patients", color(`flu_colour') axis(2)) xscale(range(`Xmin_flu' `Xmax_flu') axis(2)) xlabel(`x2labels', labgap(*0.4) tlength(*0.5) tlcolor(black) labcolor(`flu_colour') axis(2))"'
 		local Y_opts = `"ytitle("HR (95% CI) relative to mean BMI") yscale(log range(`Ymin' `Ymax')) ylabel(`ylabels', labgap(*0.5) angle(horizontal))"'
-		local xline_opts = `"xline(`X_LC_cov' `X_UC_cov', lcolor(`cov_colour') lwidth(*0.5) lpattern(shortdash) axis(1)) xline(`X_LC_flu' `X_UC_flu', lcolor(`flu_colour') lwidth(*0.5) lpattern(`flu_xlinepattern') axis(2))"'
+		*local xline_opts = `"xline(`X_LC_cov' `X_UC_cov', lcolor(`cov_colour') lwidth(*0.5) lpattern(shortdash) axis(1)) xline(`X_LC_flu' `X_UC_flu', lcolor(`flu_colour') lwidth(*0.5) lpattern(`flu_xlinepattern') axis(2))"'
 		local other_opts = `"name(plot`plotno'`cg',replace) scheme(s2mono) graphregion(color(white)) xsize(`xsize') ysize(`ysize')"'
 		local pCIcov = `"(rarea plotLCLcov plotUCLcov plotXcov,bcolor(`cov_colour'%30) lwidth(none) xaxis(1))"'
 		local pHRcov = `"(line plotYcov plotXcov if plotYcov>=`Ymin' & plotYcov<=`Ymax', lpattern(solid) lcolor(`cov_colour') xaxis(1))"'
