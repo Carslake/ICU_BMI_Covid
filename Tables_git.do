@@ -5,7 +5,7 @@
 * Creates (in work_dir): Plots_1_***_*.gph (survivor and hazard functions for various conditions and inclusion criteria)
 * Creates (in work_dir): NA_*_***_*_obs.gph (Nelson-Aalen plots for various conditions and inclusion criteria)
 * Takes about 14 minutes to run
-* David Carslake, April 2024
+* David Carslake, July 2024
 ************************************************************************************************************************
 * Working directory must be specified
 
@@ -76,20 +76,19 @@ foreach condition_useme in cov_1 flu_1 flu_2{
 }
 postclose `memhold_T1'
 
-*---------------------------------------
-* Tables 2-4, S10 and X1. Mortality~BMI:
-*---------------------------------------
+*--------------------------------------------
+* Tables 2-4, S10, X1 and S11. Mortality~BMI:
+*--------------------------------------------
 * Make a place to store the results:
 tempname memhold_T2toT4
 postfile `memhold_T2toT4' str10 Conditionvbl str3 Condition Usemevbl str8 Stratification Splitperiod str8 Exposure Beta SE N NCadmin NCother D Dlater Pph Pint using "T2toT4.dta", replace
 * stset the data:
 stset FUT, failure(Outcome) id(recordid)
 * Define the adjustment set (except for period & region):
-*local adjustment = "c.Male c.Age i.Ethnicity i.Deprivation"
 local adjustment = "c.Male c.Age_cspl1 c.Age_cspl2 c.Age_cspl3 c.Age_cspl4 i.Ethnicity i.Deprivation"
 * Define combinations of Conditionvbl-Condition-Usemevbl (ccu):
 * (Conditionvbl 2 excludes bacterial pneumonia from the definition of flu)
-foreach ccu in 1_cov_1 1_flu_1 1_flu_2 2_flu_1 1_cov_3 1_flu_3 1_cov_4 1_flu_4{
+foreach ccu in 1_cov_1 1_flu_1 1_flu_2 2_flu_1 1_cov_3 1_flu_3 1_cov_4 1_flu_4 1_cov_5 1_flu_5{
 	tokenize "`ccu'", parse("_")
 	local conditionvbl = cond(`1'==1,"Condition",cond(`1'==2,"Condition2","ERROR"))
 	local condition = "`3'"
@@ -150,7 +149,11 @@ foreach ccu in 1_cov_1 1_flu_1 1_flu_2 2_flu_1 1_cov_3 1_flu_3 1_cov_4 1_flu_4{
 	* 3. Categorical BMI, unstratified:
 	streg ib1.BMIcat `adjustment' i.Region6 i.Period if `conditionvbl'=="`condition'" & Useme`usemevbl'==1, distribution(`psa_distribution')
 	foreach cat in "0" "1" "2" "3" "4" "5"{
-		post `memhold_T2toT4' ("`conditionvbl'") ("`condition'") (`usemevbl') ("None") (.) ("BMIcat`cat'") (_b[`cat'.BMIcat]) (_se[`cat'.BMIcat]) (e(N)) (.) (.) (.) (.) (.) (.)
+		summarize Outcome if `conditionvbl'=="`condition'" & Useme`usemevbl'==1 & BMIcat==`cat'
+		local N = r(N)
+		local meanY = r(mean)
+		local D = round(`meanY'*`N',1)		
+		post `memhold_T2toT4' ("`conditionvbl'") ("`condition'") (`usemevbl') ("None") (.) ("BMIcat`cat'") (_b[`cat'.BMIcat]) (_se[`cat'.BMIcat]) (`N') (.) (.) (`D') (.) (.) (.)
 	}
 	sts graph if `conditionvbl'=="`condition'" & Useme`usemevbl'==1, by(BMIcat) na yscale(log) xscale(log) name(NA_`ccu'_obs, replace) saving(NA_`ccu'_obs.gph, replace)
 	* Stratified analyses aren't applied to the sensitivity analyses:
@@ -161,14 +164,12 @@ foreach ccu in 1_cov_1 1_flu_1 1_flu_2 2_flu_1 1_cov_3 1_flu_3 1_cov_4 1_flu_4{
 		local Pint = r(p)
 		foreach period in "1" "2" "3" "4" "5" "6"{
 			display "Numbers experiencing event or censored before 30d and overall in period `period':"
-			
 			count if `conditionvbl'=="`condition'" & Useme`usemevbl'==1 & Period==`period' & (ICU_end-ICU_start)>30
 			local NCadmin = r(N)
 			count if `conditionvbl'=="`condition'" & Useme`usemevbl'==1 & Period==`period' & (ICU_end-ICU_start)<=30 & last_dis_n=="Not yet available"
 			local NCother = r(N)
 			count if `conditionvbl'=="`condition'" & Useme`usemevbl'==1 & Period==`period' & (ICU_end-ICU_start)>30 & last_dis_n=="Died"
 			local Dlater = r(N)
-
 			summarize Outcome if `conditionvbl'=="`condition'" & Useme`usemevbl'==1 & Period==`period'
 			local N = r(N)
 			local meanY = r(mean)
