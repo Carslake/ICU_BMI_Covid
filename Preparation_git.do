@@ -6,7 +6,7 @@
 * For brevity, I refer to non-covid respiratory infections as "flu"
 * Takes about 7s to run
 * Deleteme_Prepared_data.dta MUST BE DELETED after analyses have run
-* David Carslake, April 2024
+* David Carslake, July 2024
 ************************************************************************************
 * Data and working directories must be specified
 
@@ -333,10 +333,15 @@ tabulate Useme2 Condition
 * Inclusion variable for the sensitivity analysis excluding estimated BMI:
 generate Useme3 = cond(Useme==1 & BMI_est==1,1,0)
 tabulate Useme3 Condition
-* Inclusion variable for the sensitivity analysis excluding those with comorbidities:
+* Inclusion variable for a sensitivity analysis excluding those with comorbidities:
+* (This excludes many more (45%) in flu than in cov (18%), and many of these variables are plausible mediators of a BMI effect)
+* (It is thus extremely vulnerable to bias and was omitted from the published paper)
 generate Useme4 = cond(Useme==1 & max(CM_apm, CM_dep, CM_cvd, CM_res, CM_liv, CM_kid, CM_met, CM_hae, CM_imm)==0,1,0)
 tabulate Useme4 Condition
-* (Useme4 excludes many more (45%) in flu than in cov (18%) so is very vulnerable to collider bias)
+* Inclusion variable for the sensitivity analysis excluding those with some or total dependency:
+* (Dependency is not such a likely mediator of a BMI effect on mortality)
+generate Useme5 = cond(Useme==1 & CM_dep==0,1,0)
+tabulate Useme5 Condition
 drop Useme
 
 *------------
